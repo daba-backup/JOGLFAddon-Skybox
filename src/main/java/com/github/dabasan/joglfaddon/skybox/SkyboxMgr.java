@@ -91,12 +91,17 @@ public class SkyboxMgr {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		}
 
+		// Create programs.
 		reflection_mapping = new ShaderProgram("dabasan/skybox/reflection_mapping",
 				"./Data/Shader/330/addon/dabasan/skybox/reflection_mapping/vshader.glsl",
 				"./Data/Shader/330/addon/dabasan/skybox/reflection_mapping/fshader.glsl");
 		refraction_mapping = new ShaderProgram("dabasan/skybox/refraction_mapping",
 				"./Data/Shader/330/addon/dabasan/skybox/refraction_mapping/vshader.glsl",
 				"./Data/Shader/330/addon/dabasan/skybox/refraction_mapping/fshader.glsl");
+
+		// Register programs with CameraFront.
+		CameraFront.AddProgram(reflection_mapping);
+		CameraFront.AddProgram(refraction_mapping);
 	}
 
 	public void Dispose() {
@@ -107,6 +112,9 @@ public class SkyboxMgr {
 
 		IntBuffer texture_ids = Buffers.newDirectIntBuffer(new int[]{cubemap_id});
 		glDeleteTextures(texture_ids.capacity(), texture_ids);
+
+		CameraFront.RemoveProgram(reflection_mapping);
+		CameraFront.RemoveProgram(refraction_mapping);
 	}
 
 	public void SetCubemap(ShaderProgram program, String sampler_name, int texture_unit) {
@@ -121,15 +129,22 @@ public class SkyboxMgr {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_id);
 		reflection_mapping.SetUniform("cubemap", 0);
+		dst.Enable();
+		dst.Clear();
 		Model3DFunctions.TransferModel(model_handle);
+		dst.Disable();
 		reflection_mapping.Disable();
 	}
-	public void GetRefractionMappingFactors(int model_handle, ScreenBase dst) {
+	public void GetRefractionMappingFactors(int model_handle, float eta, ScreenBase dst) {
 		refraction_mapping.Enable();
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_id);
 		refraction_mapping.SetUniform("cubemap", 0);
+		refraction_mapping.SetUniform("eta", eta);
+		dst.Enable();
+		dst.Clear();
 		Model3DFunctions.TransferModel(model_handle);
+		dst.Disable();
 		refraction_mapping.Disable();
 	}
 
@@ -148,5 +163,11 @@ public class SkyboxMgr {
 
 		// Restore the original zNear and zFar.
 		CameraFront.SetCameraNearFar(near, far);
+	}
+	public void DrawSkybox(ScreenBase dst) {
+		dst.Enable();
+		dst.Clear();
+		this.DrawSkybox();
+		dst.Disable();
 	}
 }
