@@ -11,6 +11,7 @@ import com.github.dabasan.joglf.gl.model.FlipVOption;
 import com.github.dabasan.joglf.gl.model.Model3DFunctions;
 import com.github.dabasan.joglf.gl.shader.ShaderProgram;
 import com.github.dabasan.joglf.gl.texture.TextureMgr;
+import com.github.dabasan.joglf.gl.util.screen.ScreenBase;
 import com.jogamp.common.nio.Buffers;
 
 /**
@@ -22,8 +23,11 @@ import com.jogamp.common.nio.Buffers;
 public class SkyboxMgr {
 	private int[] texture_handles;
 	private int cubemap_id;
-	private ShaderProgram simple_3d_program;
 	private int skybox_handle;
+
+	private ShaderProgram simple_3d;
+	private ShaderProgram reflection_mapping;
+	private ShaderProgram refraction_mapping;
 
 	public SkyboxMgr(String skybox_filename, String px, String py, String pz, String nx, String ny,
 			String nz) {
@@ -66,10 +70,10 @@ public class SkyboxMgr {
 		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
 		// Skybox is drawn with simple_3d (one of the default programs).
-		simple_3d_program = new ShaderProgram("simple_3d");
+		simple_3d = new ShaderProgram("simple_3d");
 		skybox_handle = Model3DFunctions.LoadModel(skybox_filename, FlipVOption.ALL);
 		Model3DFunctions.RemoveAllPrograms(skybox_handle);
-		Model3DFunctions.AddProgram(skybox_handle, simple_3d_program);
+		Model3DFunctions.AddProgram(skybox_handle, simple_3d);
 
 		// Apply textures to the skybox model.
 		for (int i = 0; i < 6; i++) {
@@ -86,6 +90,13 @@ public class SkyboxMgr {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		}
+
+		reflection_mapping = new ShaderProgram("dabasan/skybox/reflection_mapping",
+				"./Data/Shader/330/addon/dabasan/skybox/reflection_mapping/vshader.glsl",
+				"./Data/Shader/330/addon/dabasan/skybox/reflection_mapping/fshader.glsl");
+		refraction_mapping = new ShaderProgram("dabasan/skybox/refraction_mapping",
+				"./Data/Shader/330/addon/dabasan/skybox/refraction_mapping/vshader.glsl",
+				"./Data/Shader/330/addon/dabasan/skybox/refraction_mapping/fshader.glsl");
 	}
 
 	public void Dispose() {
@@ -99,9 +110,27 @@ public class SkyboxMgr {
 	}
 
 	public void SetCubemap(ShaderProgram program, String sampler_name, int texture_unit) {
+		program.Enable();
 		glActiveTexture(GL_TEXTURE0 + texture_unit);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_id);
 		program.SetUniform(sampler_name, texture_unit);
+	}
+
+	public void GetReflectionMappingFactors(int model_handle, ScreenBase dst) {
+		reflection_mapping.Enable();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_id);
+		reflection_mapping.SetUniform("cubemap", 0);
+		Model3DFunctions.TransferModel(model_handle);
+		reflection_mapping.Disable();
+	}
+	public void GetRefractionMappingFactors(int model_handle, ScreenBase dst) {
+		refraction_mapping.Enable();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_id);
+		refraction_mapping.SetUniform("cubemap", 0);
+		Model3DFunctions.TransferModel(model_handle);
+		refraction_mapping.Disable();
 	}
 
 	public void DrawSkybox() {
@@ -111,7 +140,7 @@ public class SkyboxMgr {
 		// Update zNear and zFar of the camera to draw a huge skybox.
 		CameraFront.SetCameraNearFar(100.0f, 5000.0f);
 		// Transfer the values to the "simple_3d" program.
-		CameraFront.Update(simple_3d_program);
+		CameraFront.Update(simple_3d);
 		// Draw the skybox.
 		glDisable(GL_DEPTH_TEST);
 		Model3DFunctions.DrawModel(skybox_handle);
